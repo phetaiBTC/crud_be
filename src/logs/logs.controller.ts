@@ -13,24 +13,75 @@ export class LogsController {
     return this.logsService.create(createLogDto);
   }
 
+  // @Get()
+  // async getLogs(@Query('date') date: string): Promise<{ message: string }[]> {
+  //   const logDate = date || new Date().toISOString().split('T')[0]; // เช่น '2025-04-29'
+  //   const logFile = path.join(__dirname, '..', '..', 'logs', `application-${logDate}.log`);
+
+  //   try {
+
+  //     const logContent = fs.readFileSync(logFile, 'utf-8');
+  //     const lines = logContent
+  //       .split('\n')
+  //       .filter(line => line.trim() !== '')
+  //       .map(line => ({ message: line }))
+  //       .reverse();
+
+  //     return lines;
+  //   } catch (err) {
+  //     return [{ message: `ไม่พบ log สำหรับวันที่ ${logDate}` }];
+  //   }
+  // }
   @Get()
-async getLogs(@Query('date') date: string): Promise<{ message: string }[]> {
-  const logDate = date || new Date().toISOString().split('T')[0]; // เช่น '2025-04-29'
-  const logFile = path.join(__dirname, '..', '..', 'logs', `application-${logDate}.log`);
+  async getLogs(@Query('date') date: string): Promise<{ message: any }[]> {
+    const logDate = date || new Date().toISOString().split('T')[0];
+    const logFile = path.join(__dirname, '..', '..', 'logs', `application-${logDate}.log`);
 
-  try {
-    const logContent = fs.readFileSync(logFile, 'utf-8');
-    const lines = logContent
-      .split('\n')
-      .filter(line => line.trim() !== '')
-      .map(line => ({ message: line }))
-      .reverse();
+    try {
+      const parseLog = (text: string) => {
+        const cleanedText = text.replace(/\r/g, '');
+        const dateMatch = cleanedText.match(/^\[(.*?)\]/);
+        const ipMatch = cleanedText.match(/IP:\s(.*?)\s\|/);
+        const methodMatch = cleanedText.match(/\|\s([A-Z]+)\s/);
+        const bodyMatch = cleanedText.match(/\|\s*Body:\s*(.*)$/);
 
-    return lines;
-  } catch (err) {
-    return [{ message: `ไม่พบ log สำหรับวันที่ ${logDate}` }];
+        let body = bodyMatch?.[1] || '';
+        let parsedBody: any = {};
+
+        try {
+          parsedBody = JSON.parse(body);
+
+          if (parsedBody.body && typeof parsedBody.body === 'string') {
+            try {
+              parsedBody.body = JSON.parse(parsedBody.body);
+            } catch {
+              // ไม่ทำอะไร ถ้า parse ไม่ได้
+            }
+          }
+        } catch {
+          parsedBody = { raw: body };
+        }
+
+        return {
+          date: dateMatch?.[1] || '',
+          ip: ipMatch?.[1] || '',
+          method: methodMatch?.[1] || '',
+          body: parsedBody,
+        };
+      };
+
+      const logContent = fs.readFileSync(logFile, 'utf-8');
+      const lines = logContent
+        .split('\n')
+        .filter(line => line.trim() !== '')
+        .map(line => ({ message: parseLog(line) }))
+        .reverse();
+
+      return lines;
+    } catch (err) {
+      return [{ message: `ไม่พบ log สำหรับวันที่ ${logDate}` }];
+    }
   }
-}
 
 
 }
